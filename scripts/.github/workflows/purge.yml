@@ -1,0 +1,51 @@
+
+name: Purge Queue (QA)
+
+on:
+  workflow_dispatch:
+    inputs:
+      queue:
+        description: "Queue to purge (westlaw | deep-research)"
+        required: true
+        default: westlaw
+
+jobs:
+  purge:
+    runs-on: windows-latest
+
+    env:
+      PROFILE: tr-ras-service-mesh-preprod
+      REGION: us-east-1
+      CLUSTER: a207970-preprod-ras2-use1-plexus-cluster
+      NAMESPACE: 207891-ras-search-ai-qa
+      QUEUE: ${{ inputs.queue }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::<ACCOUNT_ID>:role/<YOUR_GITHUB_OIDC_ROLE>
+          aws-region: ${{ env.REGION }}
+
+      - name: Install AWS CLI
+        shell: pwsh
+        run: |
+          if (-not (Get-Command aws -ErrorAction SilentlyContinue)) {
+            choco install awscli -y
+          }
+          aws --version
+
+      - name: Install kubectl
+        shell: pwsh
+        run: |
+          if (-not (Get-Command kubectl -ErrorAction SilentlyContinue)) {
+            choco install kubernetes-cli -y
+          }
+          kubectl version --client
+
+      - name: Run purge script
+        shell: cmd
+        run: scripts\Purge_setup.bat
