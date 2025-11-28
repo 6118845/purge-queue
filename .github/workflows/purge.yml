@@ -13,24 +13,38 @@ jobs:
   purge:
     runs-on: windows-latest
 
+    # Repo/environment variables used by script
     env:
       PROFILE: tr-ras-service-mesh-preprod
       REGION: us-east-1
       CLUSTER: a207970-preprod-ras2-use1-plexus-cluster
       NAMESPACE: 207891-ras-search-ai-qa
-      QUEUE: ${{ inputs.queue }}
+      # Use the new syntax (github.event.inputs) so it works reliably
+      QUEUE: ${{ github.event.inputs.queue }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # --- AWS credentials via secrets (supports permanent or temporary creds) ---
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          # If you created a secret named AWS_SESSION_TOKEN (temporary creds), it will be used.
+          # If not present (permanent IAM user keys), this expands to empty and is ignored.
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
           aws-region: ${{ env.REGION }}
 
+      # --- Quick diagnostics to prove credentials/region are correct ---
+      - name: Verify AWS caller identity
+        shell: pwsh
+        run: |
+          aws sts get-caller-identity
+          aws configure list
+
+      # --- Install AWS CLI if missing (Windows runner) ---
       - name: Install AWS CLI
         shell: pwsh
         run: |
@@ -39,6 +53,7 @@ jobs:
           }
           aws --version
 
+      # --- Install kubectl if missing ---
       - name: Install kubectl
         shell: pwsh
         run: |
@@ -47,6 +62,15 @@ jobs:
           }
           kubectl version --client
 
+      # --- (Optional) Configure kubecontext for EKS if your .bat touches the cluster ---
+      # Uncomment if Purge_setup.bat needs kubectl against the EKS cluster
+      # - name: Update kubeconfig for EKS
+      #   shell: pwsh
+      #   run: |
+      #     aws eks update-kubeconfig --region $Env:REGION --name $Env:CLUSTER
+      #     kubectl get ns
+
+      # --- Run your purge script ---
       - name: Run purge script
         shell: cmd
         run: scripts\Purge_setup.bat
